@@ -159,6 +159,85 @@ derived from `<namespace>/<cluster name>` the same way the module derives them. 
 upstream fails the plan naming the role it looked for rather than silently
 attaching nothing.
 
+The bucket is replicated to a second region; see below.
+
+## Cross-region replication
+
+`main.tf` replicates the bucket to `oatlabs-backoffice-pg-backups-staging-replica`
+in whatever region `local.replica_region` names. Both ends are versioned, which
+S3 requires, and the replica carries the same public-access block, SSE-S3
+encryption and lifecycle rules as the source — a second copy is only worth having
+if it is protected the same way.
+
+S3 replicates as `aws_iam_role.pg_backups_replication`, not as the identity that
+wrote the object, so that role is the only thing holding read on the source and
+write on the replica. Its trust policy is conditioned on `aws:SourceAccount` and
+the source bucket ARN, so no other account can borrow it as a confused deputy.
+
+To move the copy elsewhere, edit `local.replica_region` and re-apply. That one
+line is the whole knob — the bucket, its IAM role and the rule all follow it. The
+only constraint is that it cannot equal `local.region`, since S3 rejects a rule
+that replicates a bucket onto itself.
+
+### Delete markers are replicated
+
+`delete_marker_replication` is `Enabled`, so the replica tracks the source. When
+barman-cloud expires a backup past `PG_BACKUP_RETENTION`, the delete arrives on
+the replica as a delete marker and the replica's `expire-noncurrent-versions`
+rule reclaims the version 30 days later.
+
+Turning it off makes the replica an append-only archive: more protection against
+a delete that should not have happened, at a cost that grows without bound on a
+bucket taking a continuous WAL stream. Either way S3 never replicates the delete
+of a *specific* version, so nothing acting on the source can hard-delete the
+replica's copy.
+
+### Objects already in the bucket are not replicated
+
+A replication rule only applies to objects written after it exists. A bucket with
+backups already in it needs a one-off copy:
+
+```sh
+aws s3 sync \
+  "$(terraform output -raw pg_backups_destination)" \
+  "$(terraform output -raw pg_backups_replica_destination)" \
+  --source-region "$(terraform output -raw pg_backups_region)" \
+  --region "$(terraform output -raw pg_backups_replica_region)"
+```
+
+That copies current versions only. S3 Batch Replication is the supported way to
+carry over the full version history, and has to be started from the console or
+`aws s3control create-job`; there is no Terraform resource for it.
+
+### Restoring from the replica
+
+The postgres nodes' instance-profile policy grants **read only** on the replica —
+`ListBucket`, `GetBucketLocation`, `GetObject`. That is enough for barman-cloud to
+restore from it, and it keeps a compromised or misbehaving pod on those nodes from
+deleting the copy that exists to survive exactly that. A restore is a second
+`ObjectStore` pointed at the replica, built from:
+
+```sh
+terraform output pg_backups_replica_destination   # destinationPath
+terraform output pg_backups_replica_region        # AWS_REGION for the sidecar
+```
+
+Promoting the replica to the live backup target — a cluster rebuilt in the
+replica's region, archiving to it directly — means adding the write actions from
+the source statement to the replica statement in `aws_iam_policy.pg_backups`.
+
+### What replication does not give you
+
+It is asynchronous, with no delivery deadline unless Replication Time Control is
+switched on, and it is not. The replica normally trails the source by seconds to
+minutes, so a regional failure can still lose whatever was in flight — the RPO is
+not zero. `aws_s3_bucket_replication_configuration` accepts a `replication_time`
+block if a 15-minute SLA and CloudWatch replication metrics are worth the extra
+per-GB charge.
+
+`just destroy` takes the replica with it: this is the staging stack, so both
+buckets are `force_destroy = true`.
+
 ## Module source
 
 `main.tf` sources `oatlabs/k8s-lima/aws` from the Terraform registry, pinned to `0.0.3`.

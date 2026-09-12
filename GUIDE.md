@@ -125,7 +125,8 @@ Set three values in `main.tf`'s `locals` block:
 |---|---|
 | `cluster_name` | the cluster key in `config.json` |
 | `region` | the cluster's region |
-| `pg_backups_bucket` | change it. Bucket names are global, so `oatlabs-backoffice-pg-backups-staging` is taken |
+| `pg_backups_bucket` | change it. Bucket names are global, so `oatlabs-backoffice-pg-backups-staging` is taken. `pg_backups_replica_bucket` derives from it, so it follows |
+| `replica_region` | where backups are replicated to. Anything but `region` |
 
 Then in `config.json`: `region`, `vpc_cidr`, the subnet/AZ map, and each node's
 `instance_type` and `root_volume_size`. Change the sizes freely, but keep these five
@@ -155,8 +156,8 @@ just apply
 Takes about 10 minutes. It ends with `fetch-configs`, which writes the credentials for
 every cluster in `config.json`.
 
-**Result:** the VPC, the Talos cluster, the backup bucket, and two files Phase 2 finds by
-path, so leave them where they are:
+**Result:** the VPC, the Talos cluster, the backup bucket and its cross-region replica,
+and two files Phase 2 finds by path, so leave them where they are:
 
 ```
 .kube/us-west-2-aws-backoffice-dataplane.config      # kubectl
@@ -389,6 +390,7 @@ endpoint.
 |---|---|---|
 | branch | `staging` | `production`, checked out before both phases |
 | terraform | `infra/staging` | `infra/production`, its own `.env` and `config.json`, and another globally unique `pg_backups_bucket` |
+| backup buckets | destroyed with the stack | both carry `prevent_destroy`, so `just destroy` fails instead of deleting them |
 | vault | item `staging`, fields `staging/*` | a second item `production`, fields `production/*`, the same 11 values again |
 | certificates | `ACME_ENV: staging` | `ACME_ENV: production`, already set there |
 | DNS zone | its own | a different zone or subdomain. Sharing one means two external-dns instances writing the same records |
@@ -447,8 +449,10 @@ just destroy
 
 The first deletes the Flux stages in reverse order and waits for each inventory to be
 garbage-collected, which releases the NLBs. The second removes the cluster, the VPC, and
-the backup bucket with every backup in it, since `main.tf` sets `force_destroy = true`.
-Copy anything you want to keep out of S3 first.
+in staging both backup buckets with every backup in them, since `infra/staging/main.tf`
+sets `force_destroy = true` on each. Copy anything you want to keep out of S3 first. In
+production both buckets carry `prevent_destroy` instead, so the destroy fails on them
+rather than wiping them.
 
 Your 1Password item survives. Rebuilding starts from `just seed-vault <env>` with the
 values already there, rerun after the new apply so `pg-backup-destination` follows the new
@@ -457,7 +461,8 @@ bucket.
 ## Going deeper
 
 Day-two operations, including sizing nodes, dedicating one to a workload, Talos and
-Kubernetes upgrades, and how the backup bucket is wired, are in
+Kubernetes upgrades, and how the backup bucket and its cross-region replica are wired,
+are in
 [`infra/staging/README.md`](infra/staging/README.md).
 
 `infra/local` is a kind cluster for trying the platform on your own machine with no AWS
