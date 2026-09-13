@@ -36,6 +36,7 @@ spec:
       envoyService:
         type: LoadBalancer
         externalTrafficPolicy: Cluster
+        loadBalancerSourceRanges: ${GATEWAY_LB_SOURCE_RANGES}
         annotations:
           service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
           service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"

@@ -24,6 +24,7 @@ data:
   PLATFORM_NAMESPACE: platform-system
   ACME_ENV: production # staging | production
   GRAFANA_ALLOWED_CIDRS: '["0.0.0.0/0"]'
+  GATEWAY_LB_SOURCE_RANGES: '["0.0.0.0/0"]'
   FLUX_INTERVAL: 5m0s
   FLUX_RETRY_INTERVAL: 1m0s
   FLUX_TIMEOUT: 5m0s
