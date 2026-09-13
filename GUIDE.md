@@ -357,11 +357,14 @@ Everything it prints is read live from 1Password, so it needs `op` but no kubeco
 
 **Result:** every way into the cluster.
 
-| | |
-|---|---|
-| Grafana | `https://grafana.<zone>` and the generated admin login |
-| Hasura | the console and `/v1/graphql`. The admin secret is the API key, required on every request; Hasura has no usernames |
-| Postgres | `-rw` and `-ro` hostnames, port 5432, database `indexer-db`, with a connection URI and a `psql` command for each |
+The output has two parts. **PLATFORM** is shared by every app on the cluster; each
+**APP** section holds only what that app owns.
+
+| Section | | |
+|---|---|---|
+| PLATFORM | Grafana | `https://grafana.<zone>` and the generated admin login. One instance for the whole cluster |
+| APP: chain-indexer | Hasura | the console and `/v1/graphql`. The admin secret is the API key, required on every request; Hasura has no usernames |
+| APP: chain-indexer | Postgres | `-rw` and `-ro` hostnames, port 5432, database `indexer-db`, with a connection URI and a `psql` command for each |
 
 Under `ACME_ENV: staging` the certificates chain to the Let's Encrypt staging root, so
 browsers warn and `psql` needs the CA at `clusters/tests/stg-root-x1.pem`, which

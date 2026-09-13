@@ -89,44 +89,46 @@ fi
 
 printf '%s (%s)\n\n' "$target" "$zone"
 
-printf 'GRAFANA\n'
-printf '  url:      https://grafana.%s\n' "$zone"
-printf '  username: %s\n' "$grafana_user"
-printf '  password: %s\n\n' "$grafana_pass"
+printf 'PLATFORM (shared by every app on this cluster)\n\n'
 
-printf 'HASURA\n'
-printf '  console:  https://hasura-chain-indexer.%s/console\n' "$zone"
-printf '  graphql:  https://hasura-chain-indexer.%s/v1/graphql\n' "$zone"
-printf '  password: %s   (admin secret -- hasura has no usernames)\n\n' "$hasura_secret"
+printf '  GRAFANA\n'
+printf '    url:      https://grafana.%s\n' "$zone"
+printf '    username: %s\n' "$grafana_user"
+printf '    password: %s\n\n' "$grafana_pass"
+
+printf 'APP: chain-indexer\n\n'
+
+printf '  HASURA\n'
+printf '    console:  https://hasura-chain-indexer.%s/console\n' "$zone"
+printf '    graphql:  https://hasura-chain-indexer.%s/v1/graphql\n' "$zone"
+printf '    password: %s   (admin secret -- hasura has no usernames)\n\n' "$hasura_secret"
 
 pg_endpoint() {
     local label="$1" host="$2.$zone"
-    printf '  %s\n' "$label"
-    printf '    host:     %s\n\n' "$host"
+    local url="postgresql://postgres:$pg_pass_enc@$host:5432/indexer-db?sslmode=verify-full"
 
-    printf '    Import URL\n'
-    printf '      postgresql://postgres:%s@%s:5432/indexer-db?sslmode=verify-full\n\n' \
-        "$pg_pass_enc" "$host"
-
-    printf '    SQL Shell\n'
-    printf '      psql "postgresql://postgres:%s@%s:5432/indexer-db?sslmode=verify-full&sslrootcert=%s"\n\n' \
-        "$pg_pass_enc" "$host" "$ca"
+    printf '    %s\n' "$label"
+    printf '      host:     %s\n' "$host"
+    printf '      import:   %s\n' "$url"
+    printf '      shell:    psql "%s&sslrootcert=%s"\n\n' "$url" "$ca"
 }
 
-printf 'POSTGRES\n'
-printf '  port:     5432\n'
-printf '  database: indexer-db\n'
-printf '  username: postgres  (SUPERUSER -- unrestricted on every database)\n'
-printf '  password: %s\n' "$pg_pass"
-printf '  ssl mode: verify-full\n\n'
+printf '  POSTGRES\n'
+printf '    port:     5432\n'
+printf '    database: indexer-db\n'
+printf '    username: postgres  (SUPERUSER -- unrestricted on every database)\n'
+printf '    password: %s\n' "$pg_pass"
+printf '    ssl mode: verify-full\n'
+if [[ "$ca" == system ]]; then
+    printf '    ssl ca:   system trust store (sslrootcert=system)\n\n'
+else
+    printf '    ssl ca:   %s\n\n' "$ca"
+fi
 
 pg_endpoint 'READ-WRITE (primary)' postgres-chain-indexer-rw
 pg_endpoint 'READ-ONLY (replicas -- writes are rejected)' postgres-chain-indexer-ro
 
-if [[ "$ca" == system ]]; then
-    printf 'ssl ca:     system trust store (sslrootcert=system)\n'
-else
-    printf 'ssl ca:     %s\n' "$ca"
+if [[ "$ca" != system ]]; then
     printf 'note:       certificates chain to the Let'"'"'s Encrypt STAGING root, so browsers\n'
     printf '            warn and curl/psql need the CA above.\n'
 fi
