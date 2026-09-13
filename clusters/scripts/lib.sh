@@ -52,6 +52,46 @@ select_target() {
     fzf --prompt="$prompt > " --height='~40%' --no-multi <<<"$targets"
 }
 
+# Prints the <env>/<cluster> an <env>[/<cluster>] argument names -- or an
+# interactive pick when it is omitted -- for the scripts that need an entrypoint
+# but no kubeconfig. An env on its own -- "staging" -- is accepted when it holds
+# exactly one cluster, which is the common case; anything ambiguous has to name
+# the cluster.
+pick_target() {
+    local target="$1" prompt="$2" matches
+
+    if [[ -z "$target" ]]; then
+        target="$(select_target "$prompt")" || true
+        if [[ -z "$target" ]]; then
+            printf 'usage: %s <env>[/<cluster>]\n' "$0" >&2
+            return 1
+        fi
+    elif [[ "$target" != */* ]]; then
+        matches="$(discover_targets | awk -v e="$target" -F/ '$1 == e')"
+        case "$(printf '%s' "$matches" | grep -c . || true)" in
+            1) target="$matches" ;;
+            0)
+                printf 'error: no clusters under env %q\n' "$target" >&2
+                printf 'known targets:\n' >&2
+                discover_targets | sed 's/^/  /' >&2
+                return 1
+                ;;
+            *)
+                printf 'error: env %q holds more than one cluster, name one:\n' "$target" >&2
+                printf '%s\n' "$matches" | sed 's/^/  /' >&2
+                return 1
+                ;;
+        esac
+    fi
+
+    if [[ ! -d "$entrypoints_dir/$target" ]]; then
+        printf 'error: no entrypoint for %q at %s\n' "$target" "$entrypoints_dir/$target" >&2
+        return 1
+    fi
+
+    printf '%s' "$target"
+}
+
 # Turns an <env>/<cluster> argument -- or an interactive pick when it is omitted
 # -- into the env_name, cluster, cluster_path (the flux bootstrap --path) and
 # cluster_kubeconfig the scripts run against. The mode -- "bootstrap" or

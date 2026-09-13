@@ -7,45 +7,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 # Everything printed here is read from the vault, so this deliberately does not
 # use resolve_target: that insists on a kubeconfig, and there is no reason to
 # have fetched one just to look up a URL and a password.
-target="${1-}"
-
-# An env on its own -- "staging" -- is accepted when it holds exactly one
-# cluster, which is the common case. Anything ambiguous falls through to the
-# same <env>/<cluster> form the other scripts take.
-if [[ -n "$target" && "$target" != */* ]]; then
-    matches="$(discover_targets | awk -v e="$target" -F/ '$1 == e')"
-    case "$(printf '%s' "$matches" | grep -c . || true)" in
-        1) target="$matches" ;;
-        0)
-            printf 'error: no clusters under env %q\n' "$target" >&2
-            printf 'known targets:\n' >&2
-            discover_targets | sed 's/^/  /' >&2
-            exit 1
-            ;;
-        *)
-            printf 'error: env %q holds more than one cluster, name one:\n' "$target" >&2
-            printf '%s\n' "$matches" | sed 's/^/  /' >&2
-            exit 1
-            ;;
-    esac
-fi
-
-if [[ -z "$target" ]]; then
-    target="$(select_target "show-details")" || true
-    if [[ -z "$target" ]]; then
-        printf 'usage: %s <env>[/<cluster>]\n' "$0" >&2
-        exit 1
-    fi
-fi
-
+target="$(pick_target "${1-}" show-details)"
 env_name="${target%%/*}"
-cluster="${target#*/}"
-entrypoint="$entrypoints_dir/$env_name/$cluster"
-
-if [[ ! -d "$entrypoint" ]]; then
-    printf 'error: no entrypoint for %q at %s\n' "$target" "$entrypoint" >&2
-    exit 1
-fi
+entrypoint="$entrypoints_dir/$target"
 
 # The op:// references are read back out of the entrypoint rather than repeated
 # here, so a renamed vault item only has to change in one place.

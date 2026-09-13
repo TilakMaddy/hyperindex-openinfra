@@ -258,6 +258,9 @@ op signin
 just seed-vault staging
 ```
 
+`staging` is short for `staging/us-west-2-aws-backoffice-dataplane`, since the env holds one
+cluster. Omit it and you get the same fzf picker `bootstrap` shows.
+
 **Result:** a Secure Note titled `staging` in your vault with 18 fields, and a checklist of
 the 11 that need you:
 

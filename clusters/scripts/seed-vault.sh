@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source-path=SCRIPTDIR source=lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 # Seeding writes; the service account is provisioned read-only so External
 # Secrets can only read. Running under `openv` (op run --env-file=.env) puts its
@@ -9,41 +10,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # item.", so drop it and authenticate as the human who owns the vault.
 unset OP_SERVICE_ACCOUNT_TOKEN
 
-# The vault name is the one owner value that cannot live in the vault, so the
-# entrypoints hold it and this reads it back from them rather than keeping a
-# second copy. Every entrypoint has to name the same vault.
-resolve_vault() {
-    local names count
-
-    names="$(awk '/^  OP_VAULT: /{print $2}' \
-        "$repo_root"/clusters/entrypoints/*/*/bootstrap.yaml 2>/dev/null | sort -u)"
-    count="$(printf '%s' "$names" | grep -c . || true)"
-
-    case "$count" in
-        1) printf '%s' "$names" ;;
-        0)
-            printf 'error: no OP_VAULT found in %s/clusters/entrypoints/*/*/bootstrap.yaml\n' \
-                "$repo_root" >&2
-            printf '       set OP_VAULT to name the vault explicitly.\n' >&2
-            return 1
-            ;;
-        *)
-            printf 'error: entrypoints name %s different vaults:\n' "$count" >&2
-            printf '%s\n' "$names" | sed 's/^/       /' >&2
-            printf '       set OP_VAULT to pick one.\n' >&2
-            return 1
-            ;;
-    esac
-}
-
-vault="${OP_VAULT:-$(resolve_vault)}"
+# Both set by resolve_item from the target's entrypoint.
+vault=
+item=
 op_stderr=
-
-envs=(
-    local
-    staging
-    production
-)
 
 fields=(
     cluster-zone
@@ -90,30 +60,44 @@ external_fields=(
     grafana-smtp-from-address
 )
 
-# Same shape as lib.sh's select_target, over envs rather than <env>/<cluster>
-# targets -- what gets seeded is an env's items, and every env shares a cluster.
-select_env() {
-    fzf --prompt="seed-vault > " --height='~40%' --no-multi <<<"$(printf '%s\n' "${envs[@]}")"
+# The vault and the item are read out of the target's entrypoint rather than
+# assumed. OP_VAULT names the vault -- the one owner value that cannot live in
+# it -- and every OP_VAULT_* reference is <item>/<field>, so the item is the
+# prefix they all share. An OP_VAULT in the environment still wins.
+resolve_item() {
+    local entrypoint="$1" items count
+
+    if [[ -z "${OP_VAULT:-}" ]]; then
+        vault="$(yaml_var OP_VAULT "$entrypoint"/bootstrap.yaml)" || {
+            printf '       or set OP_VAULT to name the vault explicitly.\n' >&2
+            return 1
+        }
+    else
+        vault="$OP_VAULT"
+    fi
+
+    items="$(awk '/^  OP_VAULT_[A-Z_]+: /{split($2, p, "/"); print p[1]}' \
+        "$entrypoint"/bootstrap.yaml "$entrypoint"/main.yaml | sort -u)"
+    count="$(printf '%s' "$items" | grep -c . || true)"
+
+    if [[ "$count" != 1 ]]; then
+        printf 'error: every OP_VAULT_* in %s has to share one <item>/ prefix, found %s:\n' \
+            "$entrypoint" "$count" >&2
+        printf '%s\n' "$items" | sed 's/^/       /' >&2
+        return 1
+    fi
+
+    item="$items"
 }
 
 main() {
-    local env_name matches picked field
+    local target env_name matches field
 
-    # One env, named or picked interactively.
-    if [[ -n "${1:-}" ]]; then
-        if ! printf '%s\n' "${envs[@]}" | grep -qx -- "$1"; then
-            printf 'error: unknown env %s, expected one of: %s\n' "$1" "${envs[*]}" >&2
-            exit 1
-        fi
-        envs=("$1")
-    else
-        picked="$(select_env)" || true
-        if [[ -z "$picked" ]]; then
-            printf 'usage: %s <env>   (one of: %s)\n' "$0" "${envs[*]}" >&2
-            exit 1
-        fi
-        envs=("$picked")
-    fi
+    # One <env>/<cluster>, named -- a bare env when it holds one cluster -- or
+    # picked interactively, like bootstrap and destroy.
+    target="$(pick_target "${1-}" seed-vault)"
+    env_name="${target%%/*}"
+    resolve_item "$entrypoints_dir/$target"
 
     if ! op vault get "$vault" >/dev/null 2>&1; then
         printf 'error: cannot reach vault %s -- not signed in to op, or no access to it.\n' "$vault" >&2
@@ -122,26 +106,27 @@ main() {
         exit 1
     fi
 
-    for env_name in "${envs[@]}"; do
-        resolve_terraform "$env_name"
-        matches="$(count_items "$env_name")"
-        case "$matches" in
-            0) create "$env_name" ;;
-            1) backfill "$env_name" ;;
-            *)
-                printf 'error: %d items titled %s in %s, refusing to guess.\n' \
-                    "$matches" "$env_name" "$vault" >&2
-                exit 1
-                ;;
-        esac
-    done
+    printf 'target   %s -> %s/%s\n' "$target" "$vault" "$item"
+
+    # Terraform lives per env under infra/<env>; the item is what gets written.
+    resolve_terraform "$env_name"
+    matches="$(count_items "$item")"
+    case "$matches" in
+        0) create "$item" ;;
+        1) backfill "$item" ;;
+        *)
+            printf 'error: %d items titled %s in %s, refusing to guess.\n' \
+                "$matches" "$item" "$vault" >&2
+            exit 1
+            ;;
+    esac
 
     # Only the fields left on a placeholder actually need attention, so they are
     # marked rather than leaving the reader to check each one by hand.
     printf '\nfill in by hand, per item:\n'
     local placeholders=0
     for field in "${external_fields[@]}"; do
-        if [[ "$(op read "op://$vault/${envs[0]}/$field" 2>/dev/null)" == REPLACE_ME-* ]]; then
+        if [[ "$(op read "op://$vault/$item/$field" 2>/dev/null)" == REPLACE_ME-* ]]; then
             printf '    %s *\n' "$field"
             placeholders=$((placeholders + 1))
         else
@@ -299,7 +284,7 @@ resolve_terraform() {
 
     if [[ -z "$tf_destination" || -z "$tf_region" ]]; then
         printf 'skipped  %s/%s pg-backup-*, no terraform output in infra/%s (apply it first)\n' \
-            "$vault" "$env_name" "$env_name"
+            "$vault" "$item" "$env_name"
         return 0
     fi
 

@@ -27,8 +27,10 @@ by `scripts/seed-vault.sh`; only the `<env>/` prefix is yours to pick.
 Run it with:
 
     cd infra/<env> && just apply
-    just seed-vault          # then fill the REPLACE_ME fields in 1Password
+    just seed-vault <env>/<cluster>   # then fill the REPLACE_ME fields in 1Password
     just bootstrap <env>/<cluster>
+
+Omit the target from either and you get an fzf picker over the entrypoints that exist.
 
 `just seed-vault` is idempotent — rerun it after `terraform apply` to refresh the
 backup destination and region, which it reads from `terraform output`.

@@ -1,6 +1,6 @@
-# Seed one env's 1Password items with placeholders; omit it to pick one.
-seed-vault env="":
-    ./scripts/seed-vault.sh {{ env }}
+# Seed an <env>/<cluster>'s 1Password item with placeholders; omit it to pick one.
+seed-vault target="":
+    ./scripts/seed-vault.sh {{ target }}
 
 # Bootstrap the flux entrypoint for an <env>/<cluster>; omit it to pick one.
 bootstrap target="":
