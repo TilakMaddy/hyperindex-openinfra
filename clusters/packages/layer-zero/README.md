@@ -55,8 +55,8 @@ the vault everything else is read from.
 | `ENVOY_REPLICAS`, `SHIM_REPLICAS` | quoted integers |
 | `FLUX_INTERVAL`, `FLUX_RETRY_INTERVAL`, `FLUX_TIMEOUT` | applied to every Kustomization the package creates |
 | `GRAFANA_ALLOWED_CIDRS` | client CIDRs allowed to reach the Grafana route, as a YAML flow sequence, e.g. `'["0.0.0.0/0"]'`; everything else is denied at the gateway |
-| `GATEWAY_LB_SOURCE_RANGES` | client CIDRs allowed to open a connection to the gateway's load balancer at all, as a YAML flow sequence, e.g. `'["0.0.0.0/0"]'`; enforced by the cloud firewall on the real source address, including direct connections to node ports, so it must cover every allowlist above |
 | `OP_VAULT_CLUSTER_ZONE` | DNS zone the gateway serves, e.g. `example.com` |
+| `OP_VAULT_GATEWAY_LB_SOURCE_RANGES` | client CIDRs allowed to open a connection to the gateway's load balancer at all, stored as a YAML flow sequence, e.g. `'["0.0.0.0/0"]'`; enforced by the cloud firewall on the real source address, including direct connections to node ports, so it must cover every allowlist above |
 | `OP_VAULT_TXT_OWNER_ID` | external-dns `--txt-owner-id`; must be unique among clusters sharing a DNS zone, and changing it on a live cluster orphans the TXT records the old id owns |
 | `OP_VAULT_CLOUDFLARE_TOKEN` | `<item>/[section/]<field>` — DNS-01 and external-dns |
 | `OP_VAULT_GRAFANA_ADMIN_USER`, `OP_VAULT_GRAFANA_ADMIN_PASSWORD` | Grafana login |

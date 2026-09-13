@@ -7,6 +7,7 @@ data:
   # vault
   OP_VAULT: MyIndexer
   OP_VAULT_CLUSTER_ZONE: staging/cluster-zone
+  OP_VAULT_GATEWAY_LB_SOURCE_RANGES: staging/gateway-lb-source-ranges
   OP_VAULT_TXT_OWNER_ID: staging/txt-owner-id
   OP_VAULT_ACME_EMAIL: staging/acme-email
   OP_VAULT_ALERT_EMAIL_TO: staging/alert-email-to
@@ -24,7 +25,6 @@ data:
   PLATFORM_NAMESPACE: platform-system
   ACME_ENV: staging # staging | production
   GRAFANA_ALLOWED_CIDRS: '["0.0.0.0/0"]'
-  GATEWAY_LB_SOURCE_RANGES: '["0.0.0.0/0"]'
   FLUX_INTERVAL: 2m0s
   FLUX_RETRY_INTERVAL: 30s
   FLUX_TIMEOUT: 3m0s

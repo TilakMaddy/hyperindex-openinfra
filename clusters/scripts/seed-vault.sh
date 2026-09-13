@@ -47,6 +47,7 @@ envs=(
 
 fields=(
     cluster-zone
+    gateway-lb-source-ranges
     txt-owner-id
     indexer-image-name
     cloudflare-api-token
@@ -314,6 +315,9 @@ value_for() {
             ;;
         grafana-admin-username)
             printf 'admin'
+            ;;
+        gateway-lb-source-ranges)
+            printf '["0.0.0.0/0"]'
             ;;
         pg-backup-destination)
             if [[ "$tf_available" == yes ]]; then printf '%s' "$tf_destination"
