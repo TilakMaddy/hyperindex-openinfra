@@ -19,7 +19,7 @@ feature below is a manifest you can read.
 - **A static GraphQL endpoint** on your own DNS zone, Let's Encrypt certs renewed by
   cert-manager, records managed by external-dns.
 - **Backups you own** — CNPG base backups and WAL archiving to your S3 bucket, on a
-  schedule, with retention.
+  schedule, with retention, replicated to a second region.
 - **Secrets from 1Password**, pulled in by External Secrets and picked up on rotation by
   Reloader — no redeploy to change a variable.
 - **Grafana included**, with dashboards for indexer health and the cluster underneath it.
@@ -47,7 +47,7 @@ infrastructure is yours.
 | | | |
 | No auto-deletion over limits | Included | ✅ nothing deletes your data |
 | Static production endpoint | Included | ✅ stable hostname, cert-manager TLS, external-dns |
-| Backups | Multiregion | ✅ CNPG → S3, base + WAL, scheduled with retention |
+| Backups | Multiregion | ✅ CNPG → S3, base + WAL, scheduled with retention, replicated cross-region |
 | Zero-downtime deployments | Included | ✅ 3-instance Postgres and pooler, Hasura at 2 replicas behind a PDB; the indexer is deliberately single-replica |
 | Alerting & monitoring | Included | ✅ see below |
 | | | |
@@ -104,6 +104,7 @@ flowchart LR
   end
 
   S3[("S3")]
+  S3R[("S3 replica<br/>second region")]
 
   HS -->|"events"| IDX
   CL -->|"GraphQL, IP allowlist"| R1
@@ -114,6 +115,7 @@ flowchart LR
   HAS -->|"reads"| PG
   POOL --> PG
   PG -->|"base backups + WAL"| S3
+  S3 -->|"cross-region replication"| S3R
   IDX -->|"metrics, logs"| OBS
 ```
 
@@ -137,7 +139,7 @@ pooler.
 
 | | |
 |---|---|
-| [`infra/`](infra/staging/README.md) | Terraform per environment — the VPC, the Talos cluster, the backup bucket. Nodes are described in `config.json`; that README covers sizing, dedicating a node to a workload, upgrades and backups. |
+| [`infra/`](infra/staging/README.md) | Terraform per environment — the VPC, the Talos cluster, the backup bucket and its cross-region replica. Nodes are described in `config.json`; that README covers sizing, dedicating a node to a workload, upgrades and backups. |
 | [`clusters/entrypoints/`](clusters/entrypoints/README.md) | One `<env>/<cluster>` per Flux bootstrap target, and the variables each cluster sets. |
 | [`clusters/packages/layer-zero/`](clusters/packages/layer-zero/README.md) | The platform package — secrets, gateway, CNPG, observability — and its `platform-vars` contract. |
 | [`clusters/apps/`](clusters/apps/README.md) | The chain-indexer itself: Postgres, Hasura, the indexer, routes, dashboards, alerts. |
