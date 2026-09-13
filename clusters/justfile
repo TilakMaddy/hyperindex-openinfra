@@ -6,10 +6,10 @@ seed-vault env="":
 bootstrap target="":
     ./scripts/bootstrap.sh {{ target }}
 
-# Tear an <env>/<cluster> down ahead of terraform destroy; omit it to pick one.
-destroy target="":
-    ./scripts/destroy.sh {{ target }}
-
 # Print an <env>/<cluster>'s grafana, hasura and postgres logins; omit it to pick one.
 show-details target="":
     ./scripts/show-details.sh {{ target }}
+
+# Tear an <env>/<cluster> down ahead of terraform destroy; omit it to pick one.
+destroy target="":
+    ./scripts/destroy.sh {{ target }}
