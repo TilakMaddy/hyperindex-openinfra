@@ -39,10 +39,15 @@ halt_reconciliation() {
 # recreate a workload, a PVC or the gateway's Service once they are deleted.
 # Operators such as CNPG create bare pods, so those are deleted outright.
 stop_workloads() {
-    local ns
+    local ns targets
     for ns in $(existing_namespaces); do
         log "  $ns"
-        kc scale deployment,statefulset --all --replicas=0 -n "$ns" >/dev/null
+        # `scale --all` exits non-zero with "no objects passed to scale" in a
+        # namespace that has no Deployment or StatefulSet (e.g. one running only
+        # a DaemonSet, like alloy-system), which set -e turns into a full abort.
+        # Scale only what is actually there.
+        targets="$(kc get deployment,statefulset -n "$ns" -o name 2>/dev/null)"
+        [[ -n "$targets" ]] && kc scale --replicas=0 -n "$ns" $targets >/dev/null
         kc delete pod --all -n "$ns" --grace-period=5 --wait=false >/dev/null
     done
 }
