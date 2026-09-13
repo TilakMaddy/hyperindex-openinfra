@@ -478,4 +478,4 @@ bill. It uses the same `clusters/` half of this guide, against the `local` entry
 | [`clusters/entrypoints/README.md`](clusters/entrypoints/README.md) | what each entrypoint file declares, and the `OP_VAULT_*` contract |
 | [`clusters/packages/layer-zero/README.md`](clusters/packages/layer-zero/README.md) | the platform package: its `platform-vars` interface and the three stages it creates |
 | [`clusters/apps/README.md`](clusters/apps/README.md) | the chain-indexer app, and how the Postgres backup toggle works |
-| [README layout table](README.md#layout) | the rest of the tree |
+| [OUTLINE.md](OUTLINE.md) | the rest of the tree |

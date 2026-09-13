@@ -83,45 +83,69 @@ and `critical` reach you. Every alert the Production tier offers:
 | **Indexer Error Logs** `INFO` | ✅ *Indexer error logs* — error or fatal lines in the last 5m, from Loki |
 | **Historical Sync Complete** `INFO` | ✅ *Historical sync complete* — reached the chain head |
 
-## The stack
+## Architecture
 
 ```mermaid
 flowchart LR
+  YOU["you"]
   HS["HyperSync"]
-  CL["your clients"]
 
-  subgraph gw["Envoy Gateway · deny by default"]
-    R1["HTTPRoute<br/>hasura-chain-indexer.your.zone"]
-    R2["TLSRoute<br/>postgres-chain-indexer-rw / -ro"]
+  subgraph aws["AWS · primary region"]
+    NLB["Network Load Balancer<br/>IP allowlist on every port"]
+    S3[("S3 backups")]
+
+    subgraph k8s["Talos Kubernetes cluster · EC2 across 3 AZs"]
+      subgraph gw["Envoy Gateway"]
+        L443["HTTPS :443<br/>*.your.zone"]
+        L5432["TLS passthrough :5432"]
+      end
+
+      POOL["CNPG pooler<br/>-rw / -ro"]
+
+      subgraph general["general node"]
+        IDX["indexer"]
+        HAS["Hasura"]
+      end
+
+      subgraph pgnodes["postgres nodes · one per AZ"]
+        PG[("Postgres<br/>3 instances")]
+      end
+
+      subgraph obsnode["observability node"]
+        MET["Prometheus · Loki"]
+        GRAF["Grafana"]
+      end
+    end
   end
 
-  subgraph k8s["Talos cluster on EC2"]
-    IDX["indexer"]
-    HAS["Hasura"]
-    POOL["CNPG pooler"]
-    PG[("Postgres<br/>3 instances")]
-    OBS["Prometheus · Loki<br/>Grafana"]
+  subgraph dr["AWS · second region"]
+    S3R[("S3 replica")]
   end
 
-  S3[("S3")]
-  S3R[("S3 replica<br/>second region")]
-
+  YOU -->|"GraphQL · psql · dashboards"| NLB
+  NLB --> L443
+  NLB --> L5432
+  L443 -->|"hasura-chain-indexer.your.zone"| HAS
+  L443 -->|"grafana.your.zone"| GRAF
+  L5432 -->|"SNI postgres-chain-indexer-rw / -ro"| POOL
   HS -->|"events"| IDX
-  CL -->|"GraphQL, IP allowlist"| R1
-  CL -->|"psql, IP allowlist"| R2
-  R1 --> HAS
-  R2 --> POOL
   IDX -->|"writes rows"| PG
   HAS -->|"reads"| PG
   POOL --> PG
+  IDX -.->|"metrics, logs"| MET
+  GRAF -->|"queries"| MET
   PG -->|"base backups + WAL"| S3
   S3 -->|"cross-region replication"| S3R
-  IDX -->|"metrics, logs"| OBS
 ```
 
-Both ways in cross the same gateway, whose load balancer drops anything not on the allowlist; the
-indexer and Hasura talk to Postgres directly, and only outside clients go through the
-pooler.
+Every way in (GraphQL, Postgres, Grafana) goes through one AWS load balancer, and its
+security group drops any source not on the allowlist. What gets through reaches Envoy
+Gateway inside the cluster, which routes by hostname: the HTTP host on :443, TLS SNI on
+:5432. Postgres and the observability stack run on tainted nodes of their own, so nothing
+else lands there. The indexer and Hasura talk to Postgres directly; only connections from
+outside the cluster go through the pooler.
+
+## The stack
 
 | layer | |
 |---|---|
@@ -135,19 +159,10 @@ pooler.
 | Observability | kube-prometheus-stack, Grafana, Alloy, Loki, Tempo |
 | Policy | Kyverno, plus Envoy RBAC in front of the Postgres listeners |
 
-## Layout
-
-| | |
-|---|---|
-| [`infra/`](infra/staging/README.md) | Terraform per environment — the VPC, the Talos cluster, the backup bucket and its cross-region replica. Nodes are described in `config.json`; that README covers sizing, dedicating a node to a workload, upgrades and backups. |
-| [`clusters/entrypoints/`](clusters/entrypoints/README.md) | One `<env>/<cluster>` per Flux bootstrap target, and the variables each cluster sets. |
-| [`clusters/packages/layer-zero/`](clusters/packages/layer-zero/README.md) | The platform package — secrets, gateway, CNPG, observability — and its `platform-vars` contract. |
-| [`clusters/apps/`](clusters/apps/README.md) | The chain-indexer itself: Postgres, Hasura, the indexer, routes, dashboards, alerts. |
-
 ## Getting started
 
 Prerequisites, credentials and the four commands that stand a cluster up live in
-[GUIDE.md](GUIDE.md).
+[GUIDE.md](GUIDE.md). What each directory holds is in [OUTLINE.md](OUTLINE.md).
 
 ## Status
 
