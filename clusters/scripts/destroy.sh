@@ -40,14 +40,22 @@ halt_reconciliation() {
 # Operators such as CNPG create bare pods, so those are deleted outright.
 stop_workloads() {
     local ns targets
+
+    # Scale every controller down first, across all namespaces, before deleting
+    # any pod. Doing both per-namespace in one loop let an operator in a
+    # not-yet-processed namespace (CNPG, grafana) recreate a pod that then pins
+    # its PVC open with pvc-protection -- the PV never releases and the wait loop
+    # hangs until it times out. `scale --replicas=0 <names>` (not `--all`) avoids
+    # the "no objects passed to scale" abort in a namespace with only a DaemonSet.
     for ns in $(existing_namespaces); do
-        log "  $ns"
-        # `scale --all` exits non-zero with "no objects passed to scale" in a
-        # namespace that has no Deployment or StatefulSet (e.g. one running only
-        # a DaemonSet, like alloy-system), which set -e turns into a full abort.
-        # Scale only what is actually there.
         targets="$(kc get deployment,statefulset -n "$ns" -o name 2>/dev/null)"
         [[ -n "$targets" ]] && kc scale --replicas=0 -n "$ns" $targets >/dev/null
+    done
+
+    # Nothing is left to recreate them now, so deleted pods stay gone -- including
+    # the bare pods operators like CNPG create.
+    for ns in $(existing_namespaces); do
+        log "  $ns"
         kc delete pod --all -n "$ns" --grace-period=5 --wait=false >/dev/null
     done
 }
