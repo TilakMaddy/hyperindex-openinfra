@@ -4,73 +4,81 @@ set -euo pipefail
 # shellcheck source-path=SCRIPTDIR source=lib.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-# Reverse of the dependsOn chain, which spans four files: `common`, `apps` and
-# `bootstrap` are declared in clusters/entrypoints/<env>/<cluster>/{main,bootstrap}.yaml,
-# `pg-backups` in clusters/apps/chain-indexer/02-postgres/backups.yaml, and everything
-# between them in the layer-zero package under platform/.
-# Children are deleted before their parent so each inventory is garbage-collected
-# in order rather than cascading out of a single prune.
-stages=(observability-instances observability-collectors pg-backups apps common observability-operators observability shims core base operators underlay secrets-eso secrets-operators secrets bootstrap)
+# Releases every cloud resource the cluster created outside Terraform -- the NLB
+# behind the gateway and the EBS volumes behind each PVC -- so terraform destroy
+# can take the rest. It does not unwind the Flux stages one by one: waiting on each
+# inventory to be garbage-collected is what used to hang, and none of it matters
+# once the nodes are gone.
 
+# Namespaces the platform and its apps create. kube-system and flux-system are
+# left alone: the first runs aws-cloud-controller-manager and ebs-csi-controller,
+# which are what release the NLB and the volumes.
+namespaces=(platform-system chain-indexer alloy-system cert-manager-system cnpg-system envoy-gateway-system external-dns-system external-secrets-system grafana-system keel-system kyverno-system loki-system prometheus-system reloader-system tempo-system)
+
+existing_namespaces() {
+    local ns
+    for ns in "${namespaces[@]}"; do
+        kc get namespace "$ns" >/dev/null 2>&1 && printf '%s\n' "$ns"
+    done
+}
+
+# Suspending Kustomizations does not stop helm-controller correcting drift in
+# the HelmReleases they applied, so both are suspended.
 halt_reconciliation() {
-    local stage
+    local ns
 
-    fx suspend source git flux-system
-    fx suspend kustomization flux-system
+    fx suspend source git flux-system || true
+    fx suspend kustomization --all -n flux-system || true
 
-    # Suspending the source only stops new fetches: every Kustomization keeps
-    # reconciling the artifact source-controller already has on disk, so a live
-    # parent puts a just-deleted child straight back and the delete waits out its
-    # whole timeout for an inventory that keeps returning. The whole tree is
-    # suspended here; delete_stages resumes each one immediately before deleting
-    # it, because flux drops the finalizer without pruning when a Kustomization
-    # is suspended -- suspended-and-deleted would leave every workload running.
-    for stage in "${stages[@]}"; do
-        kc get kustomization "$stage" -n flux-system >/dev/null 2>&1 || continue
-        fx suspend kustomization "$stage"
+    for ns in $(kc get helmreleases -A --no-headers -o custom-columns=NS:.metadata.namespace 2>/dev/null | sort -u); do
+        fx suspend helmrelease --all -n "$ns" || true
     done
 }
 
-delete_stages() {
-    local stage
-    for stage in "${stages[@]}"; do
-        if ! kc get kustomization "$stage" -n flux-system >/dev/null 2>&1; then
-            log "  $stage: already gone"
-            continue
-        fi
-        log "  $stage: deleting and waiting for its inventory to be garbage-collected"
-        # Resume so the delete actually prunes; the parent stays suspended, which
-        # is what keeps the delete from being undone. --wait=false because the
-        # next line deletes it rather than waiting for a reconcile.
-        fx resume kustomization "$stage" --wait=false
-        fx delete kustomization "$stage" --silent
-        kc wait --for=delete kustomization/"$stage" -n flux-system --timeout=15m
+# With every operator and controller at zero replicas, nothing is left to
+# recreate a workload, a PVC or the gateway's Service once they are deleted.
+# Operators such as CNPG create bare pods, so those are deleted outright.
+stop_workloads() {
+    local ns
+    for ns in $(existing_namespaces); do
+        log "  $ns"
+        kc scale deployment,statefulset --all --replicas=0 -n "$ns" >/dev/null
+        kc delete pod --all -n "$ns" --grace-period=5 --wait=false >/dev/null
     done
 }
 
-wipe_leftovers() {
-    local lbs
+# The operators are down, so a failurePolicy: Fail webhook pointing at one of
+# them would reject every delete that follows.
+remove_platform_webhooks() {
+    local ns_json kind name
 
-    # A Gateway owns the LoadBalancer Service that envoy-gateway creates for it,
-    # so deleting the Service first is a race the controller wins -- it rebuilds
-    # it within a second and the NLB is never released. Deleting the Gateway
-    # makes envoy-gateway tear its own Service down, which is what lets the cloud
-    # controller manager release the load balancer. Ignored when the CRD is
-    # already gone, which is the normal case once the stages pruned cleanly.
-    if kc get crd gateways.gateway.networking.k8s.io >/dev/null 2>&1; then
-        log "  deleting Gateways so their LoadBalancer Services are released"
-        kc delete gateway --all --all-namespaces --timeout=5m || true
-    fi
+    ns_json="$(printf '%s\n' "${namespaces[@]}" | jq -R . | jq -sc .)"
 
-    kc delete pvc --all --all-namespaces --timeout=10m
+    for kind in validatingwebhookconfigurations mutatingwebhookconfigurations; do
+        kc get "$kind" -o json \
+            | jq -r --argjson ns "$ns_json" \
+                '.items[] | select(any(.webhooks[]?; .clientConfig.service.namespace as $n | $ns | index($n))) | .metadata.name' \
+            | while read -r name; do
+                log "  $kind/$name"
+                kc delete "$kind" "$name" --wait=false >/dev/null
+            done
+    done
+}
 
-    lbs="$(kc get svc --all-namespaces \
-        -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}')"
-    while read -r ns name; do
-        [[ -n "${name:-}" ]] || continue
-        log "  deleting LoadBalancer $ns/$name"
-        kc delete svc "$name" -n "$ns" --timeout=10m
-    done <<<"$lbs"
+# envoy-gateway is scaled down, so deleting its Service is no longer a race it
+# wins by rebuilding it; the cloud controller manager releases the NLB.
+delete_cloud_resources() {
+    local ns name
+
+    kc get svc --all-namespaces \
+        -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' \
+        | while read -r ns name; do
+            [[ -n "${name:-}" ]] || continue
+            log "  LoadBalancer $ns/$name"
+            kc delete svc "$name" -n "$ns" --wait=false >/dev/null
+        done
+
+    kc delete pvc --all --all-namespaces --wait=false
 }
 
 # terraform destroy removes the nodes running ebs-csi-controller and
@@ -78,11 +86,6 @@ wipe_leftovers() {
 # EBS volumes or the ELB, so refuse to hand back until the cluster shows none.
 assert_cloud_resources_released() {
     local deadline pvs lbs
-
-    if ! kc version --request-timeout=30s >/dev/null 2>&1; then
-        printf 'error: cannot reach the cluster, so the release of EBS volumes and the ELB cannot be confirmed\n' >&2
-        return 1
-    fi
 
     deadline=$(( $(date +%s) + 900 ))
 
@@ -107,60 +110,13 @@ assert_cloud_resources_released() {
             printf 'error: cloud resources still present after 15m: %s PersistentVolume(s), %s LoadBalancer Service(s)\n' \
                 "$pvs" "$lbs" >&2
             printf 'error: NOT safe for terraform destroy -- EBS volumes or an ELB would be orphaned\n' >&2
-            kc get pv 2>&1 >&2 || true
+            kc get pv,pvc -A 2>&1 >&2 || true
             return 1
         fi
 
         log "  waiting: $pvs PersistentVolume(s), $lbs LoadBalancer Service(s) remaining"
-        sleep 15
+        sleep 10
     done
-}
-
-# Namespaces the platform and its apps create. Each is declared in a manifest, so
-# deleting the stage that owns it should prune it; anything still standing at the
-# end is reported rather than left silently behind.
-namespaces=(platform-system chain-indexer alloy-system cert-manager-system cnpg-system envoy-gateway-system external-dns-system external-secrets-system grafana-system keel-system kyverno-system loki-system prometheus-system reloader-system tempo-system)
-
-# Deleting the stages leaves flux itself: the controllers, the toolkit CRDs, the
-# flux-system namespace and the suspended sources. Removing them is what makes the
-# next bootstrap behave like one against a cluster that has never seen flux.
-uninstall_flux() {
-    if ! kc get namespace flux-system >/dev/null 2>&1; then
-        log "  flux-system: already gone"
-        return 0
-    fi
-    fx uninstall --silent
-}
-
-# bootstrap.sh seeds the 1Password token before flux exists, so that namespace can
-# outlive the stage that would otherwise own it.
-remove_bootstrap_leftovers() {
-    local ns=external-secrets-system
-
-    if ! kc get namespace "$ns" >/dev/null 2>&1; then
-        log "  $ns: already gone"
-        return 0
-    fi
-
-    log "  deleting leftover namespace $ns"
-    kc delete namespace "$ns" --timeout=5m
-}
-
-report_remaining_namespaces() {
-    local ns remaining=()
-
-    for ns in "${namespaces[@]}" flux-system; do
-        kc get namespace "$ns" >/dev/null 2>&1 && remaining+=("$ns")
-    done
-
-    if [[ ${#remaining[@]} -eq 0 ]]; then
-        log "  none left, the cluster is back to what it was before bootstrap"
-        return 0
-    fi
-
-    printf 'warning: %d namespace(s) still present:\n' "${#remaining[@]}" >&2
-    printf '         %s\n' "${remaining[@]}" >&2
-    printf '         a namespace stuck Terminating is usually a finalizer on one of its resources\n' >&2
 }
 
 main() {
@@ -168,37 +124,34 @@ main() {
 
     resolve_target "${1:-}" destroy
 
+    if ! kc version --request-timeout=30s >/dev/null 2>&1; then
+        printf 'error: cannot reach the cluster at %s\n' "$cluster_kubeconfig" >&2
+        exit 1
+    fi
+
     start_epoch=$(date +%s)
-    log "Start time: $(date -r "$start_epoch" '+%Y-%m-%d %H:%M:%S %Z')"
     log "Target:     $env_name/$cluster"
     log "Kubeconfig: $cluster_kubeconfig"
 
-    log "Suspending the git source and the root kustomization so flux stops syncing"
+    log "Suspending flux -- the git source, every Kustomization and every HelmRelease"
     halt_reconciliation
 
-    log "Deleting stage kustomizations in reverse dependency order"
-    delete_stages
+    log "Scaling platform workloads to zero"
+    stop_workloads
 
-    log "Force-wiping any remaining PVCs and LoadBalancer Services"
-    wipe_leftovers
+    log "Removing admission webhooks served by the stopped operators"
+    remove_platform_webhooks
 
-    log "Uninstalling flux -- controllers, toolkit CRDs and the flux-system namespace"
-    uninstall_flux
+    log "Deleting LoadBalancer Services and PVCs"
+    delete_cloud_resources
 
-    log "Removing what bootstrap created outside flux"
-    remove_bootstrap_leftovers
-
-    log "Verifying every cloud-backed resource is released"
+    log "Waiting for the NLB and EBS volumes to be released"
     assert_cloud_resources_released
-
-    log "Checking no platform namespace survived"
-    report_remaining_namespaces
 
     end_epoch=$(date +%s)
     elapsed=$(( end_epoch - start_epoch ))
-    log "End time:   $(date -r "$end_epoch" '+%Y-%m-%d %H:%M:%S %Z')"
-    log "Elapsed:    $((elapsed / 3600))h $(((elapsed % 3600) / 60))m $((elapsed % 60))s (${elapsed}s)"
-    log "Cluster is empty again. Safe to run terraform destroy, or to bootstrap it afresh"
+    log "Elapsed:    $((elapsed / 60))m $((elapsed % 60))s"
+    log "Cloud resources released. Safe to run terraform destroy"
 }
 
 main "$@"

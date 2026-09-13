@@ -13,8 +13,8 @@ That is the intended shape, and not what the entrypoints hold right now: no
 per environment, same deploy key. Flux syncs identically either way, and
 `recurseSubmodules` costs nothing to lose while this repo has no submodules.
 `platform-foundation` is meant to come back, so the block is commented out in
-`local/`'s `bootstrap.yaml` rather than deleted, as are the two lines naming it in
-`clusters/scripts/bootstrap.sh` and `clusters/scripts/destroy.sh`. Restoring it
+`local/`'s `bootstrap.yaml` rather than deleted, as is the line naming it in
+`clusters/scripts/bootstrap.sh`. Restoring it
 means putting the `GitRepository` back in all three entrypoints and pointing
 `PLATFORM_SOURCE` and the `bootstrap` Kustomization's `sourceRef.name` at it again.
 

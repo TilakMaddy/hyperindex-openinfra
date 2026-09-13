@@ -446,8 +446,9 @@ cd ../infra/<env>
 just destroy
 ```
 
-The first deletes the Flux stages in reverse order and waits for each inventory to be
-garbage-collected, which releases the NLBs. The second removes the cluster, the VPC, and
+The first suspends Flux, scales the platform to zero and deletes the LoadBalancer Services
+and PVCs, then waits until the NLB and EBS volumes are released. It leaves the cluster
+half-dismantled, so run it only ahead of a `terraform destroy`. The second removes the cluster, the VPC, and
 in staging both backup buckets with every backup in them, since `infra/staging/s3_backup.tf`
 and `s3_replica.tf` set `force_destroy = true` on each. Copy anything you want to keep out of S3 first. In
 production both buckets carry `prevent_destroy` instead, so the destroy fails on them
