@@ -119,24 +119,23 @@ too. The justfile loads the file itself.
 $EDITOR main.tf config.json
 ```
 
-Set three values in `main.tf`'s `locals` block:
+Set three values in `main.tf`'s `locals` block. `region` and `namespace` are read from
+`config.json`:
 
 | | |
 |---|---|
 | `cluster_name` | the cluster key in `config.json` |
-| `region` | the cluster's region |
-| `pg_backups_bucket` | change it. Bucket names are global, so `oatlabs-backoffice-pg-backups-staging` is taken. `pg_backups_replica_bucket` derives from it, so it follows |
-| `replica_region` | where backups are replicated to. Anything but `region` |
+| `pg_backups_bucket_prefix` | change it. Bucket names are global, so `oatlabs-backoffice-pg-backups` is taken. The bucket is `<prefix>-<namespace>` and its replica `<prefix>-<namespace>-replica` |
+| `replica_region` | where backups are replicated to. Anything but the cluster's `region` |
 
-Then in `config.json`: `region`, `vpc_cidr`, the subnet/AZ map, and each node's
+Then in `config.json`: the cluster key, `region`, `vpc_cidr`, the subnet/AZ map, and each node's
 `instance_type` and `root_volume_size`. Change the sizes freely, but keep these five
 workers, because manifests select on them:
 
 - one with `"roles": ["general"]`, for the indexer and Hasura
 - three with `"roles": ["postgres"]` and the
   `node-role.kubernetes.io/postgres:NoSchedule` registration taint, for Postgres.
-  `main.tf` attaches the backup-bucket IAM policy to these by the names in
-  `local.postgres_nodes`
+  `s3_backup.tf` attaches the backup-bucket IAM policy to every worker with that role
 - one with `"roles": ["observability"]` and its matching taint, for Grafana, Prometheus
   and Loki
 
@@ -389,7 +388,7 @@ endpoint.
 | | staging | production |
 |---|---|---|
 | branch | `staging` | `production`, checked out before both phases |
-| terraform | `infra/staging` | `infra/production`, its own `.env` and `config.json`, and another globally unique `pg_backups_bucket` |
+| terraform | `infra/staging` | `infra/production`, its own `.env` and `config.json`, and the same `pg_backups_bucket_prefix`; the namespace keeps the bucket names apart |
 | backup buckets | destroyed with the stack | both carry `prevent_destroy`, so `just destroy` fails instead of deleting them |
 | vault | item `staging`, fields `staging/*` | a second item `production`, fields `production/*`, the same 11 values again |
 | certificates | `ACME_ENV: staging` | `ACME_ENV: production`, already set there |
@@ -404,7 +403,7 @@ git checkout production && git pull
 # Phase 1 — terminal A
 cd infra/production
 cp .env.sample .env && $EDITOR .env        # AWS profile
-$EDITOR main.tf config.json                # cluster_name, region, a unique pg_backups_bucket
+$EDITOR main.tf config.json                # cluster_name, your pg_backups_bucket_prefix
 just apply
 
 # Phase 2 — terminal B, at the repo root, on the production branch
@@ -449,8 +448,8 @@ just destroy
 
 The first deletes the Flux stages in reverse order and waits for each inventory to be
 garbage-collected, which releases the NLBs. The second removes the cluster, the VPC, and
-in staging both backup buckets with every backup in them, since `infra/staging/main.tf`
-sets `force_destroy = true` on each. Copy anything you want to keep out of S3 first. In
+in staging both backup buckets with every backup in them, since `infra/staging/s3_backup.tf`
+and `s3_replica.tf` set `force_destroy = true` on each. Copy anything you want to keep out of S3 first. In
 production both buckets carry `prevent_destroy` instead, so the destroy fails on them
 rather than wiping them.
 

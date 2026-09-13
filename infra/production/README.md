@@ -142,7 +142,7 @@ A stale `kubernetes_version` in `config.json` can roll the control plane backwar
 
 ## Postgres backups
 
-`main.tf` creates `oatlabs-backoffice-pg-backups-production` and attaches a policy scoped to it onto the
+`s3_backup.tf` creates `oatlabs-backoffice-pg-backups-production` and attaches a policy scoped to it onto the
 instance-profile roles of the three `postgres` workers (`node-1`, `node-2`,
 `node-3` in `config.json`). The CNPG barman-cloud sidecar authenticates through
 IMDSv2 with no stored credential.
@@ -153,7 +153,7 @@ three nodes can therefore read and write the backup bucket. They carry
 `node-role.kubernetes.io/postgres:NoSchedule` registration taints and only the
 CNPG cluster tolerates them, which is what keeps that set to the Postgres pods.
 
-The node names are listed in `local.postgres_nodes`, and the role names are
+The node names are every worker in `config.json` with the `postgres` role, and the role names are
 derived from `<namespace>/<cluster name>` the same way the module derives them. A
 `data "aws_iam_role"` lookup sits in front of the attachment, so a naming change
 upstream fails the plan naming the role it looked for rather than silently
@@ -163,7 +163,7 @@ The bucket is replicated to a second region; see below.
 
 ## Cross-region replication
 
-`main.tf` replicates the bucket to `oatlabs-backoffice-pg-backups-production-replica`
+`s3_replica.tf` replicates the bucket to `oatlabs-backoffice-pg-backups-production-replica`
 in whatever region `local.replica_region` names. Both ends are versioned, which
 S3 requires, and the replica carries the same public-access block, SSE-S3
 encryption and lifecycle rules as the source — a second copy is only worth having
@@ -240,7 +240,7 @@ than taking the backups with it.
 
 ## Module source
 
-`main.tf` sources `oatlabs/k8s-lima/aws` from the Terraform registry, pinned to `0.0.3`.
+`kubernetes.tf` sources `oatlabs/k8s-lima/aws` from the Terraform registry, pinned to `0.0.3`.
 Bumping it is a two-line change — `version` here and whatever `config.json` fields the new
 release adds — and `terraform init -upgrade` to move the lock file.
 
