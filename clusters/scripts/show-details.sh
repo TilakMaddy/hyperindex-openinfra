@@ -87,6 +87,10 @@ else
     ca=system
 fi
 
+db_name="$(yaml_var APP_CHAIN_INDEXER_DB_NAME "$chain_indexer_config")"
+hasura_hostname="$(yaml_var APP_CHAIN_INDEXER_HASURA_HOSTNAME "$chain_indexer_config")"
+pg_hostname="$(yaml_var APP_CHAIN_INDEXER_PG_HOSTNAME "$chain_indexer_config")"
+
 printf '%s (%s)\n\n' "$target" "$zone"
 
 printf 'PLATFORM (shared by every app on this cluster)\n\n'
@@ -99,13 +103,13 @@ printf '    password: %s\n\n' "$grafana_pass"
 printf 'APP: chain-indexer\n\n'
 
 printf '  HASURA\n'
-printf '    console:  https://hasura-chain-indexer.%s/console\n' "$zone"
-printf '    graphql:  https://hasura-chain-indexer.%s/v1/graphql\n' "$zone"
+printf '    console:  https://%s.%s/console\n' "$hasura_hostname" "$zone"
+printf '    graphql:  https://%s.%s/v1/graphql\n' "$hasura_hostname" "$zone"
 printf '    password: %s   (admin secret -- hasura has no usernames)\n\n' "$hasura_secret"
 
 pg_endpoint() {
     local label="$1" host="$2.$zone"
-    local url="postgresql://postgres:$pg_pass_enc@$host:5432/indexer-db?sslmode=verify-full"
+    local url="postgresql://postgres:$pg_pass_enc@$host:5432/$db_name?sslmode=verify-full"
 
     printf '    %s\n' "$label"
     printf '      host:     %s\n' "$host"
@@ -115,7 +119,7 @@ pg_endpoint() {
 
 printf '  POSTGRES\n'
 printf '    port:     5432\n'
-printf '    database: indexer-db\n'
+printf '    database: %s\n' "$db_name"
 printf '    username: postgres  (SUPERUSER -- unrestricted on every database)\n'
 printf '    password: %s\n' "$pg_pass"
 printf '    ssl mode: verify-full\n'
@@ -125,8 +129,8 @@ else
     printf '    ssl ca:   %s\n\n' "$ca"
 fi
 
-pg_endpoint 'READ-WRITE (primary)' postgres-chain-indexer-rw
-pg_endpoint 'READ-ONLY (replicas -- writes are rejected)' postgres-chain-indexer-ro
+pg_endpoint 'READ-WRITE (primary)' "$pg_hostname-rw"
+pg_endpoint 'READ-ONLY (replicas -- writes are rejected)' "$pg_hostname-ro"
 
 if [[ "$ca" != system ]]; then
     printf 'note:       certificates chain to the Let'"'"'s Encrypt STAGING root, so browsers\n'

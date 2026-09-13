@@ -1235,7 +1235,7 @@ spec:
                   "uid": "prometheus"
                 },
                 "format": "time_series",
-                "legendFormat": "indexer-db"
+                "legendFormat": "${APP_CHAIN_INDEXER_DB_NAME}"
               }
             ],
             "options": {

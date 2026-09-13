@@ -1,7 +1,25 @@
 # shellcheck shell=bash
-# Shared helpers for bootstrap.sh and destroy.sh. Meant to be sourced, not executed.
+# Shared helpers for the scripts in this directory. Meant to be sourced, not executed.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# The ConfigMap Flux substitutes APP_CHAIN_INDEXER_* from. Scripts read names out
+# of it rather than repeating them, so a rename there reaches them too.
+# shellcheck disable=SC2034 # used by the scripts that source this file
+chain_indexer_config="$repo_root/clusters/common/chain-indexer-config.yaml"
+
+# Prints the value of a top-level "  KEY: value" data entry, first match across
+# the given files. Fails loudly when it is missing, so a renamed key is caught
+# instead of silently becoming an empty string.
+yaml_var() {
+    local key="$1" val
+    shift
+    val="$(awk -v k="  $key: " 'index($0, k) == 1 {gsub(/"/, "", $2); print $2}' "$@" 2>/dev/null | head -1)"
+    if [[ -z "$val" ]]; then
+        printf 'error: %s not found in %s\n' "$key" "$*" >&2
+        return 1
+    fi
+    printf '%s' "$val"
+}
 # Path of the flux entrypoints, both relative to the repo root -- which is what
 # flux bootstrap --path wants -- and absolute, for walking it locally. Every
 # entrypoint lives at <entrypoints_path>/<env>/<cluster>.

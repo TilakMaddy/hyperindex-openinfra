@@ -12,8 +12,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 # Namespaces the platform and its apps create. kube-system and flux-system are
 # left alone: the first runs aws-cloud-controller-manager and ebs-csi-controller,
-# which are what release the NLB and the volumes.
-namespaces=(platform-system chain-indexer alloy-system cert-manager-system cnpg-system envoy-gateway-system external-dns-system external-secrets-system grafana-system keel-system kyverno-system loki-system prometheus-system reloader-system tempo-system)
+# which are what release the NLB and the volumes. The platform and app namespaces
+# are configurable, so main appends them once the entrypoint is known.
+namespaces=(alloy-system cert-manager-system cnpg-system envoy-gateway-system external-dns-system external-secrets-system grafana-system keel-system kyverno-system loki-system prometheus-system reloader-system tempo-system)
 
 existing_namespaces() {
     local ns
@@ -133,9 +134,15 @@ assert_cloud_resources_released() {
 }
 
 main() {
-    local start_epoch end_epoch elapsed
+    local start_epoch end_epoch elapsed platform_ns app_ns
 
     resolve_target "${1:-}" destroy
+
+    # Plain assignments, not inside the array literal: only these propagate a
+    # failed substitution to set -e.
+    platform_ns="$(yaml_var PLATFORM_NAMESPACE "$repo_root/$cluster_path"/bootstrap.yaml)"
+    app_ns="$(yaml_var APP_CHAIN_INDEXER_NAMESPACE "$chain_indexer_config")"
+    namespaces+=("$platform_ns" "$app_ns")
 
     if ! kc version --request-timeout=30s >/dev/null 2>&1; then
         printf 'error: cannot reach the cluster at %s\n' "$cluster_kubeconfig" >&2

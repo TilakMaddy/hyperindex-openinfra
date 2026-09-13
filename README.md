@@ -91,8 +91,8 @@ flowchart LR
   CL["your clients"]
 
   subgraph gw["Envoy Gateway · deny by default"]
-    R1["HTTPRoute<br/>hasura.your.zone"]
-    R2["TLSRoute<br/>postgres-rw / -ro"]
+    R1["HTTPRoute<br/>hasura-chain-indexer.your.zone"]
+    R2["TLSRoute<br/>postgres-chain-indexer-rw / -ro"]
   end
 
   subgraph k8s["Talos cluster on EC2"]
