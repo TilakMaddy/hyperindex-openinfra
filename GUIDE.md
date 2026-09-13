@@ -473,9 +473,11 @@ are in
 `infra/local` is a kind cluster for trying the platform on your own machine with no AWS
 bill. It uses the same `clusters/` half of this guide, against the `local` entrypoint.
 
+### Layout
+
 | | |
 |---|---|
-| [`clusters/entrypoints/README.md`](clusters/entrypoints/README.md) | what each entrypoint file declares, and the `OP_VAULT_*` contract |
-| [`clusters/packages/layer-zero/README.md`](clusters/packages/layer-zero/README.md) | the platform package: its `platform-vars` interface and the three stages it creates |
-| [`clusters/apps/README.md`](clusters/apps/README.md) | the chain-indexer app, and how the Postgres backup toggle works |
-| [OUTLINE.md](OUTLINE.md) | the rest of the tree |
+| [`infra/`](infra/staging/README.md) | Terraform per environment — the VPC, the Talos cluster, the backup bucket and its cross-region replica. Nodes are described in `config.json`; that README covers sizing, dedicating a node to a workload, upgrades and backups. |
+| [`clusters/entrypoints/`](clusters/entrypoints/README.md) | One `<env>/<cluster>` per Flux bootstrap target: what each entrypoint file declares, the variables each cluster sets, and the `OP_VAULT_*` contract. |
+| [`clusters/packages/layer-zero/`](clusters/packages/layer-zero/README.md) | The platform package — secrets, gateway, CNPG, observability — its `platform-vars` interface and the three stages it creates. |
+| [`clusters/apps/`](clusters/apps/README.md) | The chain-indexer itself: Postgres, Hasura, the indexer, routes, dashboards, alerts, and how the Postgres backup toggle works. |

@@ -162,7 +162,7 @@ outside the cluster go through the pooler.
 ## Getting started
 
 Prerequisites, credentials and the four commands that stand a cluster up live in
-[GUIDE.md](GUIDE.md). What each directory holds is in [OUTLINE.md](OUTLINE.md).
+[GUIDE.md](GUIDE.md), along with what each directory holds.
 
 ## Status
 
