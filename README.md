@@ -14,7 +14,7 @@ feature below is a manifest you can read.
 - **Nothing is metered.** Chains, contracts, storage, query rate, indexing hours. You pay
   EC2, not per hour indexed.
 - **Direct database access** — `-rw` and `-ro` TLS endpoints straight at the CNPG pooler,
-  each behind its own Envoy RBAC allowlist. Gated to the Dedicated plan upstream.
+  behind the gateway's source-IP allowlist. Gated to the Dedicated plan upstream.
 - **Every alert the Production tier ships**, routed to email, plus platform-level ones.
 - **A static GraphQL endpoint** on your own DNS zone, Let's Encrypt certs renewed by
   cert-manager, records managed by external-dns.
@@ -53,8 +53,8 @@ infrastructure is yours.
 | | | |
 | **Security** | | |
 | | | |
-| IP whitelisting | Included | ✅ deny-by-default Envoy `SecurityPolicy` on the GraphQL route, CIDR-gated Grafana |
-| Direct database access | Dedicated only | ✅ `-rw` / `-ro` TLS endpoints, per-route RBAC allowlists |
+| IP whitelisting | Included | ✅ `loadBalancerSourceRanges` on the gateway's load balancer: the cloud firewall drops any source not on the list, for GraphQL, Postgres and Grafana |
+| Direct database access | Dedicated only | ✅ `-rw` / `-ro` TLS endpoints behind the same IP allowlist |
 | API-key authentication | Included | ✅ Hasura's admin secret is required on every request to the GraphQL endpoint, held in 1Password and rotated there |
 | Unlisted deployments | Dedicated only | ✅ nothing is published anywhere by default |
 | | | |
@@ -119,7 +119,7 @@ flowchart LR
   IDX -->|"metrics, logs"| OBS
 ```
 
-Both ways in cross the same gateway, which denies anything not on the allowlist; the
+Both ways in cross the same gateway, whose load balancer drops anything not on the allowlist; the
 indexer and Hasura talk to Postgres directly, and only outside clients go through the
 pooler.
 

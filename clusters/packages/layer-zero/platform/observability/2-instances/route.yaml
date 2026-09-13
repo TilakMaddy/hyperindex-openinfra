@@ -17,25 +17,6 @@ spec:
 
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
-kind: SecurityPolicy
-metadata:
-  name: grafana-allowlist
-  namespace: grafana-system
-spec:
-  targetRefs:
-    - group: gateway.networking.k8s.io
-      kind: HTTPRoute
-      name: grafana-route
-  authorization:
-    defaultAction: Deny
-    rules:
-      - name: allowed-clients
-        action: Allow
-        principal:
-          clientCIDRs: ${GRAFANA_ALLOWED_CIDRS}
-
----
-apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: BackendTrafficPolicy
 metadata:
   name: grafana-no-tracing

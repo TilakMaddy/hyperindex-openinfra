@@ -25,8 +25,6 @@ data:
   PG_BACKUPS_ENABLED: "true"
   PG_BACKUP_RETENTION: 5d
   PG_BACKUP_SCHEDULE: "0 0 3 * * *"
-  CHAIN_INDEXER_HASURA_ALLOWED_CIDRS: '["0.0.0.0/0"]'
-  CHAIN_INDEXER_PG_ALLOWED_PRINCIPALS: '[{"remote_ip": {"address_prefix": "0.0.0.0", "prefix_len": 0}}]'
   INDEXER_IMAGE_PULL_POLICY: Always
   INDEXER_KEEL_POLICY: force
   INDEXER_KEEL_TRIGGER: poll

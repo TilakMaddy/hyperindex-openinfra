@@ -23,8 +23,6 @@ data:
   PG_STORAGE: 1Gi
   PG_WAL_STORAGE: 1Gi
   PG_BACKUPS_ENABLED: "false"
-  CHAIN_INDEXER_HASURA_ALLOWED_CIDRS: '["0.0.0.0/0"]'
-  CHAIN_INDEXER_PG_ALLOWED_PRINCIPALS: '[{"remote_ip": {"address_prefix": "0.0.0.0", "prefix_len": 0}}]'
   INDEXER_IMAGE_PULL_POLICY: IfNotPresent
   INDEXER_KEEL_POLICY: never
   INDEXER_KEEL_TRIGGER: poll

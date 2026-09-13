@@ -220,11 +220,10 @@ In `bootstrap.yaml`:
 |---|---|
 | `OP_VAULT` | your vault's name. Ships as `MyIndexer`, so name your vault that or change it here. Every entrypoint has to name the same vault |
 | `ACME_ENV` | `staging` while testing, `production` for real certificates. Let's Encrypt rate-limits production issuance |
-| `GRAFANA_ALLOWED_CIDRS` | who may reach Grafana. Ships as `'["0.0.0.0/0"]'` |
 
-In `main.yaml`: `CHAIN_INDEXER_HASURA_ALLOWED_CIDRS` and
-`CHAIN_INDEXER_PG_ALLOWED_PRINCIPALS`, who may reach the GraphQL and Postgres endpoints.
-Both also ship wide open. The gateway denies everything not on these three lists.
+Who may reach the cluster is not set here: the vault field `staging/gateway-lb-source-ranges`
+is the one IP allowlist for Grafana, GraphQL and Postgres alike, enforced by the cloud
+firewall on the gateway's load balancer. `seed-vault` fills it with `["0.0.0.0/0"]`.
 
 **Result:** an entrypoint pointing at your vault. Its directory name has to match the
 cluster key from 1.2, which is how the kubeconfig path is derived. The `OP_VAULT_*` values
@@ -369,7 +368,7 @@ The output has two parts. **PLATFORM** is shared by every app on the cluster; ea
 Under `ACME_ENV: staging` the certificates chain to the Let's Encrypt staging root, so
 browsers warn and `psql` needs the CA at `clusters/tests/stg-root-x1.pem`, which
 `show-details` puts in the command for you. If a URL times out while the pods are healthy,
-check the CIDR allowlists from 2.2.
+check `gateway-lb-source-ranges` from 2.2.
 
 **Check:** the indexer is advancing blocks.
 
@@ -398,7 +397,7 @@ endpoint.
 | DNS zone | its own | a different zone or subdomain. Sharing one means two external-dns instances writing the same records |
 | `txt-owner-id` | its own | a different value again |
 | sizing | `PG_STORAGE: 1Gi`, `PG_WAL_STORAGE: 1Gi`, retention `5d` | `PG_STORAGE: 20Gi`, `PG_WAL_STORAGE: 10Gi`, retention `30d`, already set there |
-| allowlists | fine left open while you test | narrow all three to the addresses that should reach it |
+| allowlist | fine left open while you test | narrow `production/gateway-lb-source-ranges` to the addresses that should reach it |
 
 ```sh
 git checkout production && git pull

@@ -24,7 +24,6 @@ data:
   PLATFORM_PATH_PREFIX: ./clusters/packages/layer-zero
   PLATFORM_NAMESPACE: platform-system
   ACME_ENV: staging # staging | production
-  GRAFANA_ALLOWED_CIDRS: '["0.0.0.0/0"]'
   FLUX_INTERVAL: 2m0s
   FLUX_RETRY_INTERVAL: 30s
   FLUX_TIMEOUT: 3m0s
