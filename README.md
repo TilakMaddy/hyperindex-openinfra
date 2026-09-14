@@ -34,10 +34,10 @@ infrastructure is yours.
 |---|---|---|
 | **Pricing & capacity** | | |
 | | | |
-| Price | Custom, on top of $70–$800/mo tiers | ✅ no licence fee — you pay AWS for the nodes you run, and nothing else |
+| Price | Custom, on top of $70–$800/mo tiers | ✅  you pay AWS for the nodes you run, and nothing else |
 | Indexing hours | Metered, $0.10–$0.50 per hour beyond the included 800 | ✅ unmetered |
 | Long-term discount | Included | ✅ EC2 reserved instances or a savings plan, at AWS's own rates |
-| Multichain indexing | ∞ chains | ✅ ∞ — bounded only by node capacity |
+| Multichain indexing | ∞ chains | ✅ ∞ chains |
 | Query rate limit | 5,000 / minute | ✅ no limit imposed; Envoy is yours to configure |
 | Approx storage | Unlimited | ✅ EBS volumes you size |
 | Number of contracts | Unlimited | ✅ no limit |
