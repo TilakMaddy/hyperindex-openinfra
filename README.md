@@ -1,12 +1,13 @@
 # HyperIndex OpenInfra — Self-Hosted HyperIndex for Everyone
 
 A free, self-hosted alternative to [HyperIndex Cloud](https://envio.dev/pricing/hosting) Offering that aims for 100% feature parity with @enviodev's dedicated plan.
-
 You only need a HyperSync token, not a HyperIndex cloud plan.
 
 > [!CAUTION]
 > **HYPERINDEX OPENINFRA IS AN INDEPENDENT COMMUNITY PROJECT. IT IS NOT AFFILIATED WITH, ENDORSED BY, OR SUPPORTED BY ENVIO (ENVIO.DEV). ENVIO, HYPERINDEX
 > AND HYPERSYNC ARE NAMES THAT BELONG TO THEIR OWNERS. FOR HELP WITH THIS PROJECT, OPEN AN ISSUE ON THE GITHUB REPO, NOT WITH ENVIO'S SUPPORT TEAM.**
+
+<img width="2000" height="800" alt="envio-ascended-banner-5x2-white-wings" src="https://github.com/user-attachments/assets/76a3ad63-25a3-4191-bf11-555a9cb05c64" />
 
 ## What you get
 
