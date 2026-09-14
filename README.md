@@ -8,11 +8,6 @@ You only need a HyperSync token, not a HyperIndex cloud plan.
 > **HYPERINDEX OPENINFRA IS AN INDEPENDENT COMMUNITY PROJECT. IT IS NOT AFFILIATED WITH, ENDORSED BY, OR SUPPORTED BY ENVIO (ENVIO.DEV). ENVIO, HYPERINDEX
 > AND HYPERSYNC ARE NAMES THAT BELONG TO THEIR OWNERS. FOR HELP WITH THIS PROJECT, OPEN AN ISSUE ON THE GITHUB REPO, NOT WITH ENVIO'S SUPPORT TEAM.**
 
-Terraform brings up a [Talos Linux](https://www.talos.dev/) Kubernetes cluster on EC2 — no
-EKS, no control-plane bill — and [Flux](https://fluxcd.io/) converges everything else from
-this repo: Postgres, Hasura, the indexer, TLS, DNS, dashboards and alerts. Every tier
-feature below is a manifest you can read.
-
 ## What you get
 
 - **Nothing is metered.** Chains, contracts, storage, query rate, indexing hours. You pay
@@ -140,12 +135,10 @@ flowchart BT
     S3 -- "cross-region replication" --> S3R
 ```
 
-Every way in (GraphQL, Postgres, Grafana) goes through one AWS load balancer, and its
-security group drops any source not on the allowlist. What gets through reaches Envoy
-Gateway inside the cluster, which routes by hostname: the HTTP host on :443, TLS SNI on
-:5432. Postgres and the observability stack run on tainted nodes of their own, so nothing
-else lands there. The indexer and Hasura talk to Postgres directly; only connections from
-outside the cluster go through the pooler.
+Terraform brings up a [Talos Linux](https://www.talos.dev/) Kubernetes cluster on EC2 - no EKS, no control-plane bill and [Flux](https://fluxcd.io/) converges everything else from this repository. Postgres, Hasura, the indexer, TLS, DNS, dashboards and alerts. 
+
+Every way in (GraphQL, Postgres, Grafana) goes through one AWS load balancer, and its security group drops any source not on the allowlist. What gets through reaches Envoy
+Gateway inside the cluster, which routes by hostname: the HTTP host on `:443`, TLS SNI on `:5432`. Postgres and the observability stack run on tainted nodes of their own, so nothing else lands there. The indexer and Hasura talk to Postgres directly; only connections from outside the cluster go through the pooler.
 
 ## The stack
 
