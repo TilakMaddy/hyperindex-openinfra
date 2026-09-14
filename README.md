@@ -4,9 +4,9 @@ A free, self-hosted alternative to [HyperIndex Cloud](https://envio.dev/pricing/
 
 You only need a HyperSync token, not a HyperIndex cloud plan.
 
-> [!IMPORTANT]  
-> HyperIndex OpenInfra is an independent community project. It is not affiliated with, endorsed by, or supported by Envio (envio.dev). Envio, HyperIndex and HyperSync
-> are names that belong to their owners. For help with this project, open an issue on the GitHub repo, not with Envio's support team.
+> [!IMPORTANT]
+> **HYPERINDEX OPENINFRA IS AN INDEPENDENT COMMUNITY PROJECT. IT IS NOT AFFILIATED WITH, ENDORSED BY, OR SUPPORTED BY ENVIO (ENVIO.DEV). ENVIO, HYPERINDEX
+> AND HYPERSYNC ARE NAMES THAT BELONG TO THEIR OWNERS. FOR HELP WITH THIS PROJECT, OPEN AN ISSUE ON THE GITHUB REPO, NOT WITH ENVIO'S SUPPORT TEAM.**
 
 Terraform brings up a [Talos Linux](https://www.talos.dev/) Kubernetes cluster on EC2 — no
 EKS, no control-plane bill — and [Flux](https://fluxcd.io/) converges everything else from
