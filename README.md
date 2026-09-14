@@ -86,56 +86,54 @@ and `critical` reach you. Every alert the Production tier offers:
 ## Architecture
 
 ```mermaid
-flowchart LR
-  YOU["you"]
-  HS["HyperSync"]
-
-  subgraph aws["AWS · primary region"]
-    NLB["Network Load Balancer<br/>IP allowlist on every port"]
-    S3[("S3 backups")]
-
-    subgraph k8s["Talos Kubernetes cluster · EC2 across 3 AZs"]
-      subgraph gw["Envoy Gateway"]
-        L443["HTTPS :443<br/>*.your.zone"]
+---
+config:
+  theme: base
+---
+flowchart BT
+ subgraph gw["Envoy Gateway"]
+        L443["HTTPS :443<br>*.your.zone"]
         L5432["TLS passthrough :5432"]
-      end
-
-      POOL["CNPG pooler<br/>-rw / -ro"]
-
-      subgraph general["general node"]
+  end
+ subgraph general["general node"]
         IDX["indexer"]
         HAS["Hasura"]
-      end
-
-      subgraph pgnodes["postgres nodes · one per AZ"]
-        PG[("Postgres<br/>3 instances")]
-      end
-
-      subgraph obsnode["observability node"]
+  end
+ subgraph pgnodes["postgres nodes · one per AZ"]
+        PG[("Postgres<br>3 instances")]
+  end
+ subgraph obsnode["observability node"]
         MET["Prometheus · Loki"]
         GRAF["Grafana"]
-      end
-    end
   end
-
-  subgraph dr["AWS · second region"]
-    S3R[("S3 replica")]
+ subgraph k8s["Talos Kubernetes cluster · EC2 across 3 AZs"]
+        gw
+        POOL["CNPG pooler<br>-rw / -ro"]
+        general
+        pgnodes
+        obsnode
   end
-
-  YOU -->|"GraphQL · psql · dashboards"| NLB
-  NLB --> L443
-  NLB --> L5432
-  L443 -->|"hasura-chain-indexer.your.zone"| HAS
-  L443 -->|"grafana.your.zone"| GRAF
-  L5432 -->|"SNI postgres-chain-indexer-rw / -ro"| POOL
-  HS -->|"events"| IDX
-  IDX -->|"writes rows"| PG
-  HAS -->|"reads"| PG
-  POOL --> PG
-  IDX -.->|"metrics, logs"| MET
-  GRAF -->|"queries"| MET
-  PG -->|"base backups + WAL"| S3
-  S3 -->|"cross-region replication"| S3R
+ subgraph aws["AWS · primary region"]
+        NLB["Network Load Balancer<br>IP allowlist on every port"]
+        S3[("S3 backups")]
+        k8s
+  end
+ subgraph dr["AWS · second region"]
+        S3R[("S3 replica")]
+  end
+    YOU["you"] -- GraphQL · psql · dashboards --> NLB
+    NLB --> L443 & L5432
+    L443 -- "hasura-chain-indexer.your.zone" --> HAS
+    L443 -- "grafana.your.zone" --> GRAF
+    L5432 -- "SNI postgres-chain-indexer-rw / -ro" --> POOL
+    HS["HyperSync"] -- events --> IDX
+    IDX -- writes rows --> PG
+    HAS -- reads --> PG
+    POOL --> PG
+    IDX -. metrics, logs .-> MET
+    GRAF -- queries --> MET
+    PG -- base backups + WAL --> S3
+    S3 -- "cross-region replication" --> S3R
 ```
 
 Every way in (GraphQL, Postgres, Grafana) goes through one AWS load balancer, and its
